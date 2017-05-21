@@ -11,6 +11,7 @@ use std::sync::Mutex;
 use std::ops::Deref;
 
 use lame::Lame;
+use lewton::VorbisError;
 use lewton::inside_ogg::OggStreamReader;
 use tiny_http::{Server, Request, Method, Response};
 
@@ -28,11 +29,14 @@ impl Rustcast {
     }
 
     pub fn get_stream(&self, mountpoint: &str) -> Option<Arc<Stream>> {
-        self.streams.read().unwrap().get(mountpoint).cloned()
+        self.streams.read()
+            .expect("reader lock on streams")
+            .get(mountpoint).cloned()
     }
 
     pub fn start_stream<'a>(&'a self, mountpoint: &str) -> Option<StreamSource<'a>> {
-        let mut streams = self.streams.write().unwrap();
+        let mut streams = self.streams.write()
+            .expect("writer lock on streams");
 
         if let Some(_) = streams.get(mountpoint) {
             None // mountpoint already in use
@@ -56,7 +60,9 @@ struct StreamSource<'a> {
 
 impl<'a> Drop for StreamSource<'a> {
     fn drop(&mut self) {
-        let mut streams = self.rustcast.streams.write().unwrap();
+        let mut streams = self.rustcast.streams.write()
+            .expect("writer lock on streams");
+
         streams.remove(&self.mountpoint);
     }
 }
@@ -84,10 +90,11 @@ impl Stream {
         let mut dead_clients = Vec::new();
 
         {
-            let clients = self.clients.read().unwrap();
+            let clients = self.clients.read()
+                .expect("reader lock on clients");
 
             for (index, client) in clients.iter().enumerate() {
-                let tx = client.lock().unwrap();
+                let tx = client.lock().expect("lock on client tx");
                 if let Err(_) = tx.try_send(bytes.clone()) {
                     dead_clients.push(index);
                 }
@@ -95,7 +102,8 @@ impl Stream {
         }
 
         if dead_clients.len() > 0 {
-            let mut clients = self.clients.write().unwrap();
+            let mut clients = self.clients.write()
+                .expect("writer lock on clients");
 
             for dead_client_index in dead_clients {
                 clients.swap_remove(dead_client_index);
@@ -106,7 +114,9 @@ impl Stream {
     pub fn subscribe(&self) -> Receiver<StreamData> {
         let (tx, rx) = sync_channel(16);
 
-        self.clients.write().unwrap().push(Mutex::new(tx));
+        self.clients.write()
+            .expect("writer lock on clients")
+            .push(Mutex::new(tx));
 
         rx
     }
@@ -153,13 +163,35 @@ fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
     let mut lame = Lame::new().unwrap();
     lame.set_sample_rate(ogg.ident_hdr.audio_sample_rate).unwrap();
     lame.set_channels(ogg.ident_hdr.audio_channels as u8).unwrap();
+    lame.set_quality(0).unwrap();
     lame.init_params().unwrap();
 
     loop {
-        let packet = ogg.read_dec_packet().unwrap().unwrap();
-        let num_samples = packet[0].len();
+        let packet = match ogg.read_dec_packet() {
+            Ok(None) => break,
+            Err(VorbisError::ReadError(_)) => break,
+            Err(VorbisError::BadAudio(_)) |
+            Err(VorbisError::BadHeader(_)) |
+            Err(VorbisError::OggError(_)) => {
+                // ignore this packet
+                continue;
+            },
+            Ok(Some(packet)) => packet,
+        };
+
+        assert!(packet.len() == ogg.ident_hdr.audio_sample_rate);
+
+        let (left, right) = match packet.len() {
+            1     => (&packet[0], &packet[0]),
+            2 | _ => (&packet[0], &packet[1]),
+        };
+
+        let num_samples = left.len();
+
+        // vector size calculation is a suggestion from lame/lame.h:
         let mut mp3buff: Vec<u8> = vec![0; (num_samples * 5) / 4 + 7200];
-        match lame.encode(&packet[0], &packet[1], &mut mp3buff) {
+
+        match lame.encode(left, right, &mut mp3buff) {
             Ok(sz) => {
                 mp3buff.resize(sz, 0);
                 let arc = Arc::new(mp3buff.into_boxed_slice());
@@ -167,7 +199,9 @@ fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
             }
             Err(e) => panic!("lame encode error: {:?}", e),
         }
-    }
+    };
+
+    Ok(())
 }
 
 fn mountpoint_from_path(path: &str) -> &str {
