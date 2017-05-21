@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
 use std::sync::Mutex;
+use std::ops::Deref;
 
 use lame::Lame;
 use lewton::inside_ogg::OggStreamReader;
@@ -30,7 +31,7 @@ impl Rustcast {
         self.streams.read().unwrap().get(mountpoint).cloned()
     }
 
-    pub fn start_stream(&self, mountpoint: &str) -> Option<Arc<Stream>> {
+    pub fn start_stream<'a>(&'a self, mountpoint: &str) -> Option<StreamSource<'a>> {
         let mut streams = self.streams.write().unwrap();
 
         if let Some(_) = streams.get(mountpoint) {
@@ -38,8 +39,33 @@ impl Rustcast {
         } else {
             let stream = Arc::new(Stream::new());
             streams.insert(mountpoint.to_owned(), stream.clone());
-            Some(stream)
+            Some(StreamSource {
+                rustcast: self,
+                mountpoint: mountpoint.to_owned(),
+                stream: stream,
+            })
         }
+    }
+}
+
+struct StreamSource<'a> {
+    rustcast: &'a Rustcast,
+    mountpoint: String,
+    stream: Arc<Stream>,
+}
+
+impl<'a> Drop for StreamSource<'a> {
+    fn drop(&mut self) {
+        let mut streams = self.rustcast.streams.write().unwrap();
+        streams.remove(&self.mountpoint);
+    }
+}
+
+impl<'a> Deref for StreamSource<'a> {
+    type Target = Arc<Stream>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.stream
     }
 }
 
