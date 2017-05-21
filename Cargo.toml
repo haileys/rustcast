@@ -1,0 +1,9 @@
+[package]
+name = "rustcast"
+version = "0.1.0"
+authors = ["Hailey Somerville <hailey@hailey.lol>"]
+
+[dependencies]
+lame = "0.1"
+lewton = "0.5"
+tiny_http = { path = "vendor/tiny-http" }
