@@ -13,6 +13,8 @@ use lame::Lame;
 use lewton::inside_ogg::OggStreamReader;
 use tiny_http::{Server, Request, Method, Response};
 
+type StreamData = Arc<Box<[u8]>>;
+
 struct Rustcast {
     streams: RwLock<HashMap<String, Arc<Stream>>>,
 }
@@ -42,7 +44,7 @@ impl Rustcast {
 }
 
 struct Stream {
-    clients: RwLock<Vec<Mutex<SyncSender<Arc<Box<[u8]>>>>>>,
+    clients: RwLock<Vec<Mutex<SyncSender<StreamData>>>>,
 }
 
 impl Stream {
@@ -52,7 +54,7 @@ impl Stream {
         }
     }
 
-    pub fn publish(&self, bytes: Arc<Box<[u8]>>) {
+    pub fn publish(&self, bytes: StreamData) {
         let mut dead_clients = Vec::new();
 
         {
@@ -75,7 +77,7 @@ impl Stream {
         }
     }
 
-    pub fn subscribe(&self) -> Receiver<Arc<Box<[u8]>>> {
+    pub fn subscribe(&self) -> Receiver<StreamData> {
         let (tx, rx) = sync_channel(16);
 
         self.clients.write().unwrap().push(Mutex::new(tx));
