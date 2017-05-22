@@ -179,7 +179,7 @@ fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
             Ok(Some(packet)) => packet,
         };
 
-        assert!(packet.len() == ogg.ident_hdr.audio_sample_rate);
+        assert!(packet.len() == (ogg.ident_hdr.audio_channels as usize));
 
         let (left, right) = match packet.len() {
             1     => (&packet[0], &packet[0]),
