@@ -2,18 +2,20 @@ extern crate lame;
 extern crate lewton;
 extern crate tiny_http;
 
+mod fanout;
+
 use std::io;
 use std::thread;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use std::sync::mpsc::{sync_channel, SyncSender, Receiver};
-use std::sync::Mutex;
 use std::ops::Deref;
 
 use lame::Lame;
 use lewton::VorbisError;
 use lewton::inside_ogg::OggStreamReader;
 use tiny_http::{Server, Request, Method, Response};
+
+use fanout::{Channel, Receiver};
 
 type StreamData = Arc<Box<[u8]>>;
 
@@ -76,49 +78,22 @@ impl<'a> Deref for StreamSource<'a> {
 }
 
 struct Stream {
-    clients: RwLock<Vec<Mutex<SyncSender<StreamData>>>>,
+    channel: Channel<StreamData>,
 }
 
 impl Stream {
     pub fn new() -> Stream {
         Stream {
-            clients: RwLock::new(Vec::new()),
+            channel: Channel::new(16),
         }
     }
 
     pub fn publish(&self, bytes: StreamData) {
-        let mut dead_clients = Vec::new();
-
-        {
-            let clients = self.clients.read()
-                .expect("reader lock on clients");
-
-            for (index, client) in clients.iter().enumerate() {
-                let tx = client.lock().expect("lock on client tx");
-                if let Err(_) = tx.try_send(bytes.clone()) {
-                    dead_clients.push(index);
-                }
-            }
-        }
-
-        if dead_clients.len() > 0 {
-            let mut clients = self.clients.write()
-                .expect("writer lock on clients");
-
-            for dead_client_index in dead_clients {
-                clients.swap_remove(dead_client_index);
-            }
-        }
+        self.channel.publish(bytes);
     }
 
     pub fn subscribe(&self) -> Receiver<StreamData> {
-        let (tx, rx) = sync_channel(16);
-
-        self.clients.write()
-            .expect("writer lock on clients")
-            .push(Mutex::new(tx));
-
-        rx
+        self.channel.subscribe()
     }
 }
 
@@ -226,7 +201,7 @@ fn handle_client(rustcast: &Rustcast, req: Request) -> io::Result<()> {
     response.write_all(b"HTTP/1.0 200 OK\r\nServer: Rustcast\r\nContent-Type: audio/mpeg\r\n\r\n")?;
 
     let rx = stream.subscribe();
-    while let Ok(buffer) = rx.recv() {
+    while let Some(buffer) = rx.recv() {
         response.write_all(&buffer)?;
     }
 
