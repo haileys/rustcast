@@ -17,7 +17,7 @@ use tiny_http::{Server, Request, Method, Response};
 
 use fanout::{Channel, Receiver};
 use ogg::OggStream;
-use audio::{AudioStream, StreamRead, StreamError};
+use audio::{AudioStream, StreamRead, StreamError, Metadata};
 
 type StreamData = Arc<Box<[u8]>>;
 
@@ -81,12 +81,14 @@ impl<'a> Deref for StreamSource<'a> {
 
 struct Stream {
     channel: Channel<StreamData>,
+    metadata: RwLock<Metadata>,
 }
 
 impl Stream {
     pub fn new() -> Stream {
         Stream {
             channel: Channel::new(16),
+            metadata: RwLock::new(Metadata { artist: None, title: None }),
         }
     }
 
@@ -130,7 +132,7 @@ fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
             Ok(StreamRead::Eof) => break,
             Ok(StreamRead::Audio(packet)) => packet,
             Ok(StreamRead::Metadata(metadata)) => {
-                println!("{:?}", metadata);
+                *stream.metadata.write().unwrap() = metadata;
                 continue;
             }
         };
