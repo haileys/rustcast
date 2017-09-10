@@ -3,6 +3,7 @@ extern crate lewton;
 extern crate tiny_http;
 
 mod fanout;
+mod ogg;
 
 use std::io;
 use std::thread;
@@ -12,10 +13,10 @@ use std::ops::Deref;
 
 use lame::Lame;
 use lewton::VorbisError;
-use lewton::inside_ogg::OggStreamReader;
 use tiny_http::{Server, Request, Method, Response};
 
 use fanout::{Channel, Receiver};
+use ogg::OggStream;
 
 type StreamData = Arc<Box<[u8]>>;
 
@@ -97,31 +98,6 @@ impl Stream {
     }
 }
 
-struct NonSeekStream<T: io::Read> {
-    stream: T,
-}
-
-impl<T> io::Read for NonSeekStream<T> where T: io::Read {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        match self.stream.read(buf) {
-            Ok(sz) => Ok(sz),
-            Err(e) => Err(e),
-        }
-    }
-}
-
-impl<T> io::Seek for NonSeekStream<T> where T: io::Read {
-    fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
-        panic!("trying to seek NonSeekStream: {:?}", pos);
-    }
-}
-
-impl<T> NonSeekStream<T> where T: io::Read {
-    pub fn new(stream: T) -> NonSeekStream<T> {
-        NonSeekStream { stream: stream }
-    }
-}
-
 fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
     let stream = match rustcast.start_stream(mountpoint_from_path(req.url())) {
         Some(stream) => stream,
@@ -133,16 +109,16 @@ fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
     };
 
     let source = req.upgrade("icecast", Response::empty(200));
-    let mut ogg = OggStreamReader::new(NonSeekStream::new(source)).unwrap();
+    let mut ogg = OggStream::new(source).unwrap();
 
     let mut lame = Lame::new().unwrap();
-    lame.set_sample_rate(ogg.ident_hdr.audio_sample_rate).unwrap();
-    lame.set_channels(ogg.ident_hdr.audio_channels as u8).unwrap();
+    lame.set_sample_rate(ogg.ident_hdr().audio_sample_rate).unwrap();
+    lame.set_channels(ogg.ident_hdr().audio_channels as u8).unwrap();
     lame.set_quality(0).unwrap();
     lame.init_params().unwrap();
 
     loop {
-        let packet = match ogg.read_dec_packet() {
+        let packet = match ogg.read_pcm() {
             Ok(None) => break,
             Err(VorbisError::ReadError(_)) => break,
             Err(VorbisError::BadAudio(_)) |
@@ -154,7 +130,7 @@ fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
             Ok(Some(packet)) => packet,
         };
 
-        assert!(packet.len() == (ogg.ident_hdr.audio_channels as usize));
+        assert!(packet.len() == (ogg.ident_hdr().audio_channels as usize));
 
         let (left, right) = match packet.len() {
             1     => (&packet[0], &packet[0]),
