@@ -2,11 +2,13 @@ extern crate ogg;
 
 use std::io;
 
-use self::ogg::PacketReader;
+use self::ogg::{PacketReader, OggReadError};
 use lewton::VorbisError;
 use lewton::inside_ogg::read_headers;
 use lewton::audio::{read_audio_packet, PreviousWindowRight, AudioReadError};
 use lewton::header::{read_header_comment, IdentHeader, CommentHeader, SetupHeader};
+
+use audio::{AudioStream, StreamRead, StreamError, Metadata};
 
 struct NonSeekStream<T: io::Read> {
     stream: T,
@@ -33,12 +35,6 @@ impl<T> NonSeekStream<T> where T: io::Read {
     }
 }
 
-#[derive(Debug)]
-pub struct Metadata {
-    artist: Option<String>,
-    title: Option<String>,
-}
-
 impl From<CommentHeader> for Metadata {
     fn from(header: CommentHeader) -> Metadata {
         let mut artist = None;
@@ -54,12 +50,6 @@ impl From<CommentHeader> for Metadata {
 
         Metadata { artist, title }
     }
-}
-
-pub enum OggRead {
-    Eof,
-    Audio(Vec<Vec<i16>>),
-    Metadata(Metadata),
 }
 
 pub struct OggStream<T: io::Read> {
@@ -85,33 +75,40 @@ impl<T: io::Read> OggStream<T> {
             setup_hdr,
         })
     }
+}
 
-    pub fn sample_rate(&self) -> u32 {
+impl<T: io::Read> AudioStream for OggStream<T> {
+    fn sample_rate(&self) -> u32 {
         self.ident_hdr.audio_sample_rate
     }
 
-    pub fn channels(&self) -> u8 {
+    fn channels(&self) -> u8 {
         self.ident_hdr.audio_channels
     }
 
-    pub fn read(&mut self) -> Result<OggRead, VorbisError> {
-        let packet = match PacketReader::read_packet(&mut self.rdr)? {
-            Some(packet) => packet,
-            None => return Ok(OggRead::Eof),
+    fn read(&mut self) -> Result<StreamRead, StreamError> {
+        let packet = match PacketReader::read_packet(&mut self.rdr) {
+            Ok(Some(packet)) => packet,
+            Ok(None) => return Ok(StreamRead::Eof),
+            Err(OggReadError::ReadError(e)) => return Err(StreamError::IoError(e)),
+            Err(OggReadError::NoCapturePatternFound) |
+            Err(OggReadError::InvalidStreamStructVer(_)) |
+            Err(OggReadError::HashMismatch(_, _)) |
+            Err(OggReadError::InvalidData) => return Err(StreamError::BadPacket),
         };
 
         let decoded_packet = read_audio_packet(&self.ident_hdr,
             &self.setup_hdr, &packet.data, &mut self.pwr);
 
         match decoded_packet {
-            Ok(pcm) => return Ok(OggRead::Audio(pcm)),
+            Ok(pcm) => return Ok(StreamRead::Audio(pcm)),
             Err(AudioReadError::AudioIsHeader) => {
                 match read_header_comment(&packet.data) {
-                    Ok(comment) => Ok(OggRead::Metadata(comment.into())),
-                    Err(e) => Err(e.into()),
+                    Ok(comment) => Ok(StreamRead::Metadata(comment.into())),
+                    Err(_) => Err(StreamError::BadPacket),
                 }
             },
-            Err(e) => return Err(e.into()),
+            Err(_) => return Err(StreamError::BadPacket),
         }
     }
 }

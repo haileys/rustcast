@@ -2,6 +2,7 @@ extern crate lame;
 extern crate lewton;
 extern crate tiny_http;
 
+mod audio;
 mod fanout;
 mod ogg;
 
@@ -12,11 +13,11 @@ use std::sync::{Arc, RwLock};
 use std::ops::Deref;
 
 use lame::Lame;
-use lewton::VorbisError;
 use tiny_http::{Server, Request, Method, Response};
 
 use fanout::{Channel, Receiver};
-use ogg::{OggStream, OggRead};
+use ogg::OggStream;
+use audio::{AudioStream, StreamRead, StreamError};
 
 type StreamData = Arc<Box<[u8]>>;
 
@@ -119,16 +120,11 @@ fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
 
     loop {
         let packet = match ogg.read() {
-            Err(VorbisError::ReadError(_)) => break,
-            Err(VorbisError::BadAudio(_)) |
-            Err(VorbisError::BadHeader(_)) |
-            Err(VorbisError::OggError(_)) => {
-                // ignore this packet
-                continue;
-            },
-            Ok(OggRead::Eof) => break,
-            Ok(OggRead::Audio(packet)) => packet,
-            Ok(OggRead::Metadata(metadata)) => {
+            Err(StreamError::IoError(_)) => break,
+            Err(StreamError::BadPacket) => continue,
+            Ok(StreamRead::Eof) => break,
+            Ok(StreamRead::Audio(packet)) => packet,
+            Ok(StreamRead::Metadata(metadata)) => {
                 println!("{:?}", metadata);
                 continue;
             }
