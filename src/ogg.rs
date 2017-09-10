@@ -87,7 +87,7 @@ impl<T: io::Read> AudioStream for OggStream<T> {
     }
 
     fn read(&mut self) -> Result<StreamRead, StreamError> {
-        let packet = match PacketReader::read_packet(&mut self.rdr) {
+        let packet = match self.rdr.read_packet() {
             Ok(Some(packet)) => packet,
             Ok(None) => return Ok(StreamRead::Eof),
             Err(OggReadError::ReadError(e)) => return Err(StreamError::IoError(e)),
