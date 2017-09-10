@@ -112,8 +112,8 @@ fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
     let mut ogg = OggStream::new(source).unwrap();
 
     let mut lame = Lame::new().unwrap();
-    lame.set_sample_rate(ogg.ident_hdr().audio_sample_rate).unwrap();
-    lame.set_channels(ogg.ident_hdr().audio_channels as u8).unwrap();
+    lame.set_sample_rate(ogg.sample_rate()).unwrap();
+    lame.set_channels(ogg.channels()).unwrap();
     lame.set_quality(0).unwrap();
     lame.init_params().unwrap();
 
@@ -130,7 +130,7 @@ fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
             Ok(Some(packet)) => packet,
         };
 
-        assert!(packet.len() == (ogg.ident_hdr().audio_channels as usize));
+        assert!(packet.len() == (ogg.channels() as usize));
 
         let (left, right) = match packet.len() {
             1     => (&packet[0], &packet[0]),

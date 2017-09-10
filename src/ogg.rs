@@ -1,7 +1,6 @@
 use std::io;
 
 use lewton::VorbisError;
-use lewton::header::IdentHeader;
 use lewton::inside_ogg::OggStreamReader;
 
 struct NonSeekStream<T: io::Read> {
@@ -39,8 +38,12 @@ impl<T: io::Read> OggStream<T> {
             OggStream { ogg: ogg })
     }
 
-    pub fn ident_hdr(&self) -> &IdentHeader {
-        &self.ogg.ident_hdr
+    pub fn sample_rate(&self) -> u32 {
+        self.ogg.ident_hdr.audio_sample_rate
+    }
+
+    pub fn channels(&self) -> u8 {
+        self.ogg.ident_hdr.audio_channels
     }
 
     pub fn read_pcm(&mut self) -> Result<Option<Vec<Vec<i16>>>, VorbisError> {
