@@ -16,7 +16,7 @@ use lewton::VorbisError;
 use tiny_http::{Server, Request, Method, Response};
 
 use fanout::{Channel, Receiver};
-use ogg::OggStream;
+use ogg::{OggStream, OggRead};
 
 type StreamData = Arc<Box<[u8]>>;
 
@@ -118,8 +118,7 @@ fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
     lame.init_params().unwrap();
 
     loop {
-        let packet = match ogg.read_pcm() {
-            Ok(None) => break,
+        let packet = match ogg.read() {
             Err(VorbisError::ReadError(_)) => break,
             Err(VorbisError::BadAudio(_)) |
             Err(VorbisError::BadHeader(_)) |
@@ -127,7 +126,12 @@ fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
                 // ignore this packet
                 continue;
             },
-            Ok(Some(packet)) => packet,
+            Ok(OggRead::Eof) => break,
+            Ok(OggRead::Audio(packet)) => packet,
+            Ok(OggRead::Metadata(metadata)) => {
+                println!("{:?}", metadata);
+                continue;
+            }
         };
 
         assert!(packet.len() == (ogg.channels() as usize));

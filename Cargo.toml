@@ -5,5 +5,6 @@ authors = ["Hailey Somerville <hailey@hailey.lol>"]
 
 [dependencies]
 lame = "0.1"
-lewton = "0.5"
+lewton = "0.6.2"
+ogg = "0.5.1"
 tiny_http = { path = "vendor/tiny-http" }
