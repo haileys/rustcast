@@ -1,6 +1,9 @@
 extern crate lame;
 extern crate lewton;
 extern crate tiny_http;
+extern crate serde_json;
+#[macro_use]
+extern crate serde_derive;
 
 mod audio;
 mod fanout;
@@ -108,7 +111,7 @@ fn audio_stream(req: Request) -> Box<AudioStream> {
 }
 
 fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
-    let stream = match rustcast.start_stream(mountpoint_from_path(req.url())) {
+    let stream = match rustcast.start_stream(req.url()) {
         Some(stream) => stream,
         None => {
             // mountpoint name in use:
@@ -162,33 +165,73 @@ fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
     Ok(())
 }
 
-fn mountpoint_from_path(path: &str) -> &str {
-    if path.ends_with(".mp3") {
-        &path[0..(path.len() - 4)]
-    } else {
-        path
+enum RequestFormat {
+    Mp3,
+    Json,
+}
+
+fn extract_request_format(path: &str) -> (RequestFormat, String) {
+    fn chomp<'a>(string: &'a str, suffix: &str) -> Option<&'a str> {
+        if string.ends_with(suffix) {
+            Some(&string[0..(string.len() - suffix.len())])
+        } else {
+            None
+        }
     }
+
+    if let Some(mountpoint) = chomp(path, ".mp3") {
+        (RequestFormat::Mp3, mountpoint.to_owned())
+    } else if let Some(mountpoint) = chomp(path, ".json") {
+        (RequestFormat::Json, mountpoint.to_owned())
+    } else {
+        (RequestFormat::Mp3, path.to_owned())
+    }
+}
+
+#[derive(Serialize)]
+struct MountpointJson {
+    artist: Option<String>,
+    title: Option<String>,
 }
 
 fn handle_client(rustcast: &Rustcast, req: Request) -> io::Result<()> {
     use std::io::prelude::*;
 
-    let stream = match rustcast.get_stream(mountpoint_from_path(req.url())) {
+    let (format, mountpoint) = extract_request_format(req.url());
+
+    let stream = match rustcast.get_stream(&mountpoint) {
         Some(stream) => stream,
         None => return req.respond(
             Response::from_string("<h1>Not found</h1>\n")
                 .with_status_code(404)),
     };
 
-    let mut response = req.into_writer();
-    response.write_all(b"HTTP/1.0 200 OK\r\nServer: Rustcast\r\nContent-Type: audio/mpeg\r\n\r\n")?;
+    match format {
+        RequestFormat::Mp3 => {
+            let mut response = req.into_writer();
+            response.write_all(b"HTTP/1.0 200 OK\r\nServer: Rustcast\r\nContent-Type: audio/mpeg\r\n\r\n")?;
 
-    let rx = stream.subscribe();
-    while let Some(buffer) = rx.recv() {
-        response.write_all(&buffer)?;
+            let rx = stream.subscribe();
+            while let Some(buffer) = rx.recv() {
+                response.write_all(&buffer)?;
+            }
+
+            Ok(())
+        }
+        RequestFormat::Json => {
+            let data = {
+                let metadata = stream.metadata.read().unwrap();
+
+                MountpointJson {
+                    artist: metadata.artist.clone(),
+                    title: metadata.title.clone(),
+                }
+            };
+
+            req.respond(Response::from_string(serde_json::to_string(&data).unwrap())
+                .with_status_code(200))
+        }
     }
-
-    Ok(())
 }
 
 fn handle_request(rustcast: Arc<Rustcast>, req: Request) -> io::Result<()> {
@@ -197,7 +240,7 @@ fn handle_request(rustcast: Arc<Rustcast>, req: Request) -> io::Result<()> {
         Method::Get => handle_client(&rustcast, req),
         _ => {
             req.respond(Response::from_string("<h1>Method not allowed</h1>\n")
-                .with_status_code(405))
+                .with_status_code(404))
         }
     }
 }
