@@ -99,6 +99,12 @@ impl Stream {
     }
 }
 
+fn audio_stream(req: Request) -> Box<AudioStream> {
+    let source = req.upgrade("icecast", Response::empty(200));
+    let ogg = OggStream::new(source).unwrap();
+    Box::new(ogg)
+}
+
 fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
     let stream = match rustcast.start_stream(mountpoint_from_path(req.url())) {
         Some(stream) => stream,
@@ -109,17 +115,16 @@ fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
         }
     };
 
-    let source = req.upgrade("icecast", Response::empty(200));
-    let mut ogg = OggStream::new(source).unwrap();
+    let mut audio_stream = audio_stream(req);
 
     let mut lame = Lame::new().unwrap();
-    lame.set_sample_rate(ogg.sample_rate()).unwrap();
-    lame.set_channels(ogg.channels()).unwrap();
+    lame.set_sample_rate(audio_stream.sample_rate()).unwrap();
+    lame.set_channels(audio_stream.channels()).unwrap();
     lame.set_quality(0).unwrap();
     lame.init_params().unwrap();
 
     loop {
-        let packet = match ogg.read() {
+        let packet = match audio_stream.read() {
             Err(StreamError::IoError(_)) => break,
             Err(StreamError::BadPacket) => continue,
             Ok(StreamRead::Eof) => break,
@@ -130,7 +135,7 @@ fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
             }
         };
 
-        assert!(packet.len() == (ogg.channels() as usize));
+        assert!(packet.len() == (audio_stream.channels() as usize));
 
         let (left, right) = match packet.len() {
             1     => (&packet[0], &packet[0]),
