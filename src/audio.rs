@@ -20,6 +20,7 @@ pub enum StreamError {
 }
 
 pub trait AudioStream {
+    fn codec_name(&self) -> &'static str;
     fn sample_rate(&self) -> u32;
     fn channels(&self) -> u8;
     fn bitrate_nominal(&self) -> i32;

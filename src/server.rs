@@ -1,9 +1,10 @@
-use std::io::{self, Write};
-use std::thread;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
-use std::ops::Deref;
 use std::fs::File;
+use std::io::{self, Write};
+use std::ops::Deref;
+use std::sync::{Arc, RwLock};
+use std::thread;
+use std::time::Instant;
 
 use lame::Lame;
 use serde_json;
@@ -12,12 +13,14 @@ use uuid::Uuid;
 
 use config::Config;
 use fanout::{Channel, Receiver};
+use log::Log;
 use ogg::OggStream;
 use audio::{AudioStream, StreamRead, StreamError, Metadata};
 
 type StreamData = Arc<Box<[u8]>>;
 
 struct Rustcast {
+    log: Log,
     config: Config,
     streams: RwLock<HashMap<String, Arc<Stream>>>,
 }
@@ -25,6 +28,7 @@ struct Rustcast {
 impl Rustcast {
     pub fn new(config: Config) -> Rustcast {
         Rustcast {
+            log: Log::new(),
             config: config,
             streams: RwLock::new(HashMap::new()),
         }
@@ -135,6 +139,15 @@ fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
     lame.set_kilobitrate(kilobitrate).unwrap();
     lame.init_params().unwrap();
 
+    let start = Instant::now();
+
+    rustcast.log.info(&format!("Started stream {} ({} {}hz {}ch {}kbps)",
+        stream.mountpoint,
+        audio_stream.codec_name(),
+        audio_stream.sample_rate(),
+        audio_stream.channels(),
+        audio_stream.bitrate_nominal() / 1000));
+
     loop {
         let packet = match audio_stream.read() {
             Err(StreamError::IoError(_)) => break,
@@ -170,6 +183,8 @@ fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
         stream_dump.write_all(&buff)?;
         stream.publish(buff);
     };
+
+    rustcast.log.info(&format!("Finished stream {} (duration {} sec)", stream.mountpoint, start.elapsed().as_secs()));
 
     Ok(())
 }
@@ -259,7 +274,7 @@ pub fn run(config: Config) {
 
     let server = Server::http(&rustcast.config.listen).unwrap();
 
-    println!("Listening on {}", rustcast.config.listen);
+    rustcast.log.info(&format!("Listening on {}", rustcast.config.listen));
 
     for request in server.incoming_requests() {
         let rustcast = rustcast.clone();

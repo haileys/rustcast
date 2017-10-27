@@ -1,3 +1,4 @@
+extern crate chrono;
 extern crate lame;
 extern crate lewton;
 extern crate serde_json;
@@ -11,6 +12,7 @@ extern crate serde_derive;
 mod audio;
 mod config;
 mod fanout;
+mod log;
 mod ogg;
 mod server;
 

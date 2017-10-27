@@ -78,6 +78,10 @@ impl<T: io::Read> OggStream<T> {
 }
 
 impl<T: io::Read> AudioStream for OggStream<T> {
+    fn codec_name(&self) -> &'static str {
+        "Vorbis"
+    }
+
     fn sample_rate(&self) -> u32 {
         self.ident_hdr.audio_sample_rate
     }
