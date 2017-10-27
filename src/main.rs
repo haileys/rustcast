@@ -3,6 +3,8 @@ extern crate lewton;
 extern crate serde_json;
 extern crate tiny_http;
 extern crate toml;
+extern crate uuid;
+
 #[macro_use]
 extern crate serde_derive;
 

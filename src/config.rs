@@ -7,6 +7,7 @@ use toml;
 #[derive(Deserialize)]
 pub struct Config {
     pub listen: String,
+    pub stream_dump: String,
 }
 
 #[derive(Debug)]

@@ -86,6 +86,10 @@ impl<T: io::Read> AudioStream for OggStream<T> {
         self.ident_hdr.audio_channels
     }
 
+    fn bitrate_nominal(&self) -> i32 {
+        self.ident_hdr.bitrate_nominal
+    }
+
     fn read(&mut self) -> Result<StreamRead, StreamError> {
         let packet = match self.rdr.read_packet() {
             Ok(Some(packet)) => packet,

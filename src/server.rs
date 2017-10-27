@@ -1,12 +1,14 @@
-use std::io;
+use std::io::{self, Write};
 use std::thread;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::ops::Deref;
+use std::fs::File;
 
 use lame::Lame;
 use serde_json;
 use tiny_http::{Server, Request, Method, Response};
+use uuid::Uuid;
 
 use config::Config;
 use fanout::{Channel, Receiver};
@@ -113,6 +115,13 @@ fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
         }
     };
 
+    let uuid = Uuid::new_v4();
+
+    let stream_dump_path = rustcast.config.stream_dump.replace("{uuid}",
+        &format!("{}", uuid.hyphenated()));
+
+    let mut stream_dump = File::create(stream_dump_path)?;
+
     let mut audio_stream = audio_stream(req);
 
     let mut lame = Lame::new().unwrap();
@@ -145,14 +154,16 @@ fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
         // vector size calculation is a suggestion from lame/lame.h:
         let mut mp3buff: Vec<u8> = vec![0; (num_samples * 5) / 4 + 7200];
 
-        match lame.encode(left, right, &mut mp3buff) {
+        let buff = match lame.encode(left, right, &mut mp3buff) {
             Ok(sz) => {
                 mp3buff.resize(sz, 0);
-                let arc = Arc::new(mp3buff.into_boxed_slice());
-                stream.publish(arc);
+                Arc::new(mp3buff.into_boxed_slice())
             }
             Err(e) => panic!("lame encode error: {:?}", e),
-        }
+        };
+
+        stream_dump.write_all(&buff)?;
+        stream.publish(buff);
     };
 
     Ok(())

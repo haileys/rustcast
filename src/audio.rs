@@ -22,5 +22,6 @@ pub enum StreamError {
 pub trait AudioStream {
     fn sample_rate(&self) -> u32;
     fn channels(&self) -> u8;
+    fn bitrate_nominal(&self) -> i32;
     fn read(&mut self) -> Result<StreamRead, StreamError>;
 }
