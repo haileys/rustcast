@@ -124,10 +124,15 @@ fn handle_source(rustcast: &Rustcast, req: Request) -> io::Result<()> {
 
     let mut audio_stream = audio_stream(req);
 
+    // ogg reports bitrate in bits per second, but LAME's idea of bitrate
+    // is in kilobits per second:
+    let kilobitrate = audio_stream.bitrate_nominal() / 1000;
+
     let mut lame = Lame::new().unwrap();
     lame.set_sample_rate(audio_stream.sample_rate()).unwrap();
     lame.set_channels(audio_stream.channels()).unwrap();
     lame.set_quality(0).unwrap();
+    lame.set_kilobitrate(kilobitrate).unwrap();
     lame.init_params().unwrap();
 
     loop {

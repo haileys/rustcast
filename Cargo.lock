@@ -2,7 +2,7 @@
 name = "rustcast"
 version = "0.1.0"
 dependencies = [
- "lame 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lame 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "lewton 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "ogg 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.14 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -133,7 +133,7 @@ dependencies = [
 
 [[package]]
 name = "lame"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
@@ -386,7 +386,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum encoding_index_tests 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "a246d82be1c9d791c5dfde9a2bd045fc3cbba3fa2b11ad558f27d01712f00569"
 "checksum itoa 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "ac17257442c2ed77dbc9fd555cf83c58b0c7f7d0e8f2ae08c0ac05c72842e1f6"
 "checksum kernel32-sys 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7507624b29483431c0ba2d82aece8ca6cdba9382bff4ddd0f7490560c056098d"
-"checksum lame 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0594fa9a319a8cc941c245d3fdfe4b027726cc1066ee49d6d2f0977b9b447dda"
+"checksum lame 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "89a6b06a85b6b12cf1447051f02e3e1cc809f6dcab96c16c60abe65c885357c3"
 "checksum lewton 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)" = "0de1cca3399919efa65ae7e01ed6696c961bd0fc9e844c05c80f90b638300bbf"
 "checksum libc 0.2.30 (registry+https://github.com/rust-lang/crates.io-index)" = "2370ca07ec338939e356443dac2296f581453c35fe1e3a3ed06023c49435f915"
 "checksum log 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)" = "880f77541efa6e5cc74e76910c9884d9859683118839d6a1dc3b11e63512565b"
