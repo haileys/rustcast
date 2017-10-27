@@ -16,12 +16,14 @@ use audio::{AudioStream, StreamRead, StreamError, Metadata};
 type StreamData = Arc<Box<[u8]>>;
 
 struct Rustcast {
+    config: Config,
     streams: RwLock<HashMap<String, Arc<Stream>>>,
 }
 
 impl Rustcast {
-    pub fn new() -> Rustcast {
+    pub fn new(config: Config) -> Rustcast {
         Rustcast {
+            config: config,
             streams: RwLock::new(HashMap::new()),
         }
     }
@@ -237,9 +239,11 @@ fn handle_request(rustcast: Arc<Rustcast>, req: Request) -> io::Result<()> {
 }
 
 pub fn run(config: Config) {
-    let rustcast = Arc::new(Rustcast::new());
+    let rustcast = Arc::new(Rustcast::new(config));
 
-    let server = Server::http("0.0.0.0:3001").unwrap();
+    let server = Server::http(&rustcast.config.listen).unwrap();
+
+    println!("Listening on {}", rustcast.config.listen);
 
     for request in server.incoming_requests() {
         let rustcast = rustcast.clone();
