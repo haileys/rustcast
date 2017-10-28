@@ -1,6 +1,9 @@
+extern crate base64;
 extern crate chrono;
 extern crate lame;
 extern crate lewton;
+extern crate reqwest;
+extern crate serde;
 extern crate serde_json;
 extern crate tiny_http;
 extern crate toml;
@@ -12,6 +15,7 @@ extern crate serde_derive;
 mod audio;
 mod config;
 mod fanout;
+mod hooks;
 mod log;
 mod ogg;
 mod server;
