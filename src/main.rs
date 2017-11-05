@@ -14,6 +14,7 @@ extern crate serde_derive;
 
 mod audio;
 mod config;
+mod cookie;
 mod fanout;
 mod hooks;
 mod log;

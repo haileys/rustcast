@@ -1,6 +1,9 @@
 listen = "0.0.0.0:3001"
 stream_dump = "dump/{uuid}.mp3"
+session_cookie = "sets_user"
 
 [webhooks]
 stream_start = "http://127.0.0.1:3000/_rustcast/stream_start"
 stream_end = "http://127.0.0.1:3000/_rustcast/stream_end"
+listener_start = "http://127.0.0.1:3000/_rustcast/listener_start"
+listener_end = "http://127.0.0.1:3000/_rustcast/listener_end"

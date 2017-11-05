@@ -11,7 +11,10 @@ pub enum HookError {
     Status(reqwest::StatusCode),
 }
 
-fn call_hook<Params: Serialize, Resp: DeserializeOwned>(url: &str, params: Params) -> Result<Resp, HookError> {
+fn call_hook<Params: Serialize, Resp: DeserializeOwned>(
+    url: &str,
+    params: Params,
+) -> Result<Resp, HookError> {
     let mut response = Client::new()
         .post(url)
         .json(&params)
@@ -64,7 +67,7 @@ pub struct StreamEndParams<'a> {
 }
 
 #[derive(Deserialize)]
-struct StreamEndResponse {}
+struct EmptyResponse {}
 
 pub fn stream_end<'a>(config: &Config, params: StreamEndParams<'a>) -> Result<(), HookError> {
     let url = match config.webhooks.stream_end.as_ref() {
@@ -72,7 +75,35 @@ pub fn stream_end<'a>(config: &Config, params: StreamEndParams<'a>) -> Result<()
         None => return Ok(()),
     };
 
-    call_hook::<_, StreamEndResponse>(url, params)?;
+    call_hook::<_, EmptyResponse>(url, params)?;
+
+    Ok(())
+}
+
+#[derive(Serialize)]
+pub struct ListenerParams<'a> {
+    pub uuid: &'a Uuid,
+    pub session_cookie: Option<&'a str>,
+}
+
+pub fn listener_start<'a>(config: &Config, params: ListenerParams<'a>) -> Result<(), HookError> {
+    let url = match config.webhooks.listener_start.as_ref() {
+        Some(url) => url,
+        None => return Ok(()),
+    };
+
+    call_hook::<_, EmptyResponse>(url, params)?;
+
+    Ok(())
+}
+
+pub fn listener_end<'a>(config: &Config, params: ListenerParams<'a>) -> Result<(), HookError> {
+    let url = match config.webhooks.listener_end.as_ref() {
+        Some(url) => url,
+        None => return Ok(()),
+    };
+
+    call_hook::<_, EmptyResponse>(url, params)?;
 
     Ok(())
 }

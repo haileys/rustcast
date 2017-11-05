@@ -9,6 +9,8 @@ use toml;
 pub struct Webhooks {
     pub stream_start: Option<String>,
     pub stream_end: Option<String>,
+    pub listener_start: Option<String>,
+    pub listener_end: Option<String>,
 }
 
 impl Default for Webhooks {
@@ -16,6 +18,8 @@ impl Default for Webhooks {
         Webhooks {
             stream_start: None,
             stream_end: None,
+            listener_start: None,
+            listener_end: None,
         }
     }
 }
@@ -24,6 +28,7 @@ impl Default for Webhooks {
 pub struct Config {
     pub listen: String,
     pub stream_dump: String,
+    pub session_cookie: Option<String>,
     #[serde(default)]
     pub webhooks: Webhooks,
 }

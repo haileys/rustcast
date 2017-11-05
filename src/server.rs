@@ -14,8 +14,9 @@ use uuid::Uuid;
 
 use audio::{AudioStream, StreamRead, StreamError, Metadata};
 use config::Config;
+use cookie::Cookies;
 use fanout::{Channel, Receiver};
-use hooks::{self, StreamStart, StreamStartParams, StreamEndParams};
+use hooks::{self, StreamStart, StreamStartParams, StreamEndParams, ListenerParams};
 use log::Log;
 use ogg::OggStream;
 
@@ -317,9 +318,18 @@ struct MountpointJson {
     title: Option<String>,
 }
 
-fn handle_client(rustcast: &Rustcast, req: Request) -> io::Result<()> {
-    use std::io::prelude::*;
+fn stream_to_client(stream: &Stream, response: &mut Write) -> io::Result<()> {
+    response.write_all(b"HTTP/1.0 200 OK\r\nServer: Rustcast\r\nContent-Type: audio/mpeg\r\n\r\n")?;
 
+    let rx = stream.subscribe();
+    while let Some(buffer) = rx.recv() {
+        response.write_all(&buffer)?;
+    }
+
+    Ok(())
+}
+
+fn handle_client(rustcast: &Rustcast, req: Request) -> io::Result<()> {
     let (format, mountpoint) = extract_request_format(req.url());
 
     let stream = match rustcast.get_stream(&mountpoint) {
@@ -330,17 +340,32 @@ fn handle_client(rustcast: &Rustcast, req: Request) -> io::Result<()> {
                     .with_status_code(404)),
     };
 
+    let session_cookie = req.headers().iter()
+        .find(|h| h.field.equiv("Cookie"))
+        .map(|h| Cookies::new(h.value.as_str()))
+        .and_then(|cookies|
+            rustcast.config.session_cookie.as_ref().and_then(|cookie_name|
+                cookies.lookup(cookie_name).map(|value| value.to_owned())));
+
+    let session_cookie = session_cookie.as_ref()
+        .map(String::as_ref);
+
     match format {
         RequestFormat::Mp3 => {
+            hooks::listener_start(&rustcast.config, ListenerParams {
+                uuid: &stream.uuid,
+                session_cookie: session_cookie,
+            });
+
             let mut response = req.into_writer();
-            response.write_all(b"HTTP/1.0 200 OK\r\nServer: Rustcast\r\nContent-Type: audio/mpeg\r\n\r\n")?;
+            let result = stream_to_client(&stream, &mut response);
 
-            let rx = stream.subscribe();
-            while let Some(buffer) = rx.recv() {
-                response.write_all(&buffer)?;
-            }
+            hooks::listener_end(&rustcast.config, ListenerParams {
+                uuid: &stream.uuid,
+                session_cookie: session_cookie,
+            });
 
-            Ok(())
+            result
         }
         RequestFormat::Json => {
             let data = {
